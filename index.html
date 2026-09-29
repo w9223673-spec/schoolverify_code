@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>响应码计算器</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.2.0/crypto-js.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .container {
+            background: #fff;
+            border-radius: 16px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.15);
+            padding: 40px;
+            width: 90%;
+            max-width: 420px;
+        }
+        h1 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 8px;
+            font-size: 24px;
+        }
+        .subtitle {
+            text-align: center;
+            color: #888;
+            font-size: 13px;
+            margin-bottom: 30px;
+        }
+        .form-group {
+            margin-bottom: 20px;
+        }
+        label {
+            display: block;
+            color: #555;
+            font-size: 14px;
+            margin-bottom: 6px;
+            font-weight: 500;
+        }
+        input[type="text"] {
+            width: 100%;
+            padding: 12px 16px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 16px;
+            transition: border-color 0.2s;
+            outline: none;
+            letter-spacing: 2px;
+        }
+        input[type="text"]:focus {
+            border-color: #667eea;
+        }
+        input[type="text"]::placeholder {
+            color: #bbb;
+            letter-spacing: 0;
+        }
+        button {
+            width: 100%;
+            padding: 14px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #fff;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.1s, box-shadow 0.2s;
+        }
+        button:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+        }
+        button:active {
+            transform: translateY(0);
+        }
+        .result {
+            margin-top: 24px;
+            padding: 20px;
+            background: #f8f9ff;
+            border-radius: 8px;
+            border: 1px dashed #667eea;
+            text-align: center;
+            display: none;
+        }
+        .result.show { display: block; }
+        .result-label {
+            color: #888;
+            font-size: 13px;
+            margin-bottom: 8px;
+        }
+        .result-value {
+            color: #333;
+            font-size: 32px;
+            font-weight: 700;
+            letter-spacing: 6px;
+        }
+        .info {
+            margin-top: 20px;
+            padding-top: 16px;
+            border-top: 1px solid #eee;
+            color: #999;
+            font-size: 12px;
+            line-height: 1.8;
+        }
+        .error {
+            color: #e74c3c;
+            font-size: 13px;
+            margin-top: 6px;
+            display: none;
+        }
+        .error.show { display: block; }
+        .salt-display {
+            margin-top: 12px;
+            padding: 10px 14px;
+            background: #f5f5f5;
+            border-radius: 6px;
+            font-size: 13px;
+            color: #666;
+        }
+        .salt-display code {
+            background: #e8e8e8;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: "SF Mono", "Fira Code", monospace;
+            color: #d63384;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>响应码计算器</h1>
+        <p class="subtitle">输入请求码，自动计算响应码</p>
+
+        <div class="form-group">
+            <label for="challenge">请求码（挑战码）</label>
+            <input type="text" id="challenge" placeholder="请输入6位数字请求码" maxlength="8" autocomplete="off">
+            <div class="error" id="error">请输入有效的数字请求码（1-8位数字）</div>
+        </div>
+
+        <button id="calcBtn">计算响应码</button>
+
+        <div class="result" id="result">
+            <div class="result-label">计算结果</div>
+            <div class="result-value" id="responseValue">------</div>
+        </div>
+
+        <div class="salt-display">
+            当前 Salt: <code>fundot.ii.</code>
+        </div>
+
+        <div class="info">
+            算法说明：E(x) = 取 MD5(x) 的十六进制串，将 a→1,b→2,c→3,d→4,e→5,f→6 替换后取前6位<br>
+            响应码 = E(请求码 + salt)
+        </div>
+    </div>
+
+    <script>
+    /* ========== E(x) 变换函数 ========== */
+    function E(x) {
+        // 使用 CryptoJS 计算 MD5
+        var md5hex = CryptoJS.MD5(x).toString(CryptoJS.enc.Hex);
+        // a→1, b→2, c→3, d→4, e→5, f→6
+        var replaced = md5hex.replace(/[abcdef]/g, function(m) {
+            return '123456'[ 'abcdef'.indexOf(m) ];
+        });
+        return replaced.substring(0, 6);
+    }
+
+    /* ========== 业务逻辑 ========== */
+    var SALT = 'fundot.ii.';
+
+    function solveResponse(challenge) {
+        return E(challenge + SALT);
+    }
+
+    /* ========== UI 交互 ========== */
+    var challengeInput = document.getElementById('challenge');
+    var calcBtn = document.getElementById('calcBtn');
+    var resultDiv = document.getElementById('result');
+    var responseValue = document.getElementById('responseValue');
+    var errorDiv = document.getElementById('error');
+
+    function validate(input) {
+        if (!input || input.length === 0 || !/^\d+$/.test(input) || input.length > 8) {
+            return false;
+        }
+        return true;
+    }
+
+    function calculate() {
+        var challenge = challengeInput.value.trim();
+        errorDiv.classList.remove('show');
+
+        if (!validate(challenge)) {
+            errorDiv.classList.add('show');
+            resultDiv.classList.remove('show');
+            return;
+        }
+
+        var response = solveResponse(challenge);
+        responseValue.textContent = response;
+        resultDiv.classList.add('show');
+    }
+
+    calcBtn.addEventListener('click', calculate);
+
+    // 支持回车键触发计算
+    challengeInput.addEventListener('keypress', function(e) {
+        if (e.key === 'Enter') {
+            calculate();
+        }
+    });
+
+    // 输入时只允许数字
+    challengeInput.addEventListener('input', function(e) {
+        e.target.value = e.target.value.replace(/\D/g, '');
+        errorDiv.classList.remove('show');
+    });
+    </script>
+</body>
+</html>
